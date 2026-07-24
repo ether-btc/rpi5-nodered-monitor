@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
-# One-time install of the node-red-dashboard palette into the container.
-# Idempotent — safe to re-run.
+# Recover the node-red-dashboard palette after an image rebuild.
 #
-# Why this exists:
-#   The image ships node-red globally in /usr/local/lib/node_modules. A
-#   plain `npm install -g node-red-dashboard` lands in the image layer, so
-#   the next image rebuild loses it. We work around that by symlinking
-#   the dashboard module into the persistent /data/node_modules, which
-#   Node-RED always scans on startup.
+# run.sh does this automatically on first launch. Run this script manually
+# if you ever pulled a new node-red image (which destroys the in-container
+# writable layer where the palette lives).
+#
+# Why this dance:
+#   `npm install -g node-red-dashboard` inside the container lands in the
+#   writable overlay layer. That layer is destroyed whenever the container
+#   is recreated (e.g. on a new image pull). The persistent /data volume
+#   survives, so we symlink the dashboard module there for the next start.
 
 set -euo pipefail
 
@@ -18,18 +20,21 @@ if ! podman container exists "$CONTAINER_NAME"; then
   exit 1
 fi
 
-echo "[1/3] Installing node-red-dashboard globally inside the container..."
+echo "[1/4] Installing node-red-dashboard globally inside the container..."
 podman exec -u root "$CONTAINER_NAME" \
   npm install -g --unsafe-perm node-red-dashboard 2>&1 | tail -3
 
-echo "[2/3] Symlinking into persistent /data/node_modules..."
+echo "[2/4] Symlinking into persistent /data/node_modules..."
+podman exec -u root "$CONTAINER_NAME" mkdir -p /data/node_modules
 podman exec -u root "$CONTAINER_NAME" \
   ln -sfn /usr/local/lib/node_modules/node-red-dashboard \
             /data/node_modules/node-red-dashboard
 
-echo "[3/3] Restarting container to pick up the new palette..."
+echo "[3/4] Restarting container to pick up the new palette..."
 podman restart "$CONTAINER_NAME"
 
-echo "Done. Wait ~20s, then open http://127.0.0.1:1880 in a browser"
-echo "       (via SSH tunnel). The 'dashboard' group should appear in the"
-echo "       left palette under the 'dashboard' category."
+echo "[4/4] Waiting for boot (~25s)..."
+sleep 25
+
+echo ""
+echo "Done. Open http://127.0.0.1:1880/ui via SSH tunnel."

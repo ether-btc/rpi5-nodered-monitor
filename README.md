@@ -14,6 +14,12 @@ Access from any LAN/Tailscale client through an SSH tunnel → `http://127.0.0.1
 | RAM Used | `/proc/meminfo` | 5 s | Gauge + chart + text (MB) |
 | Disk usage (SD + USB) & Uptime | `df` + `/proc/uptime` | 30 s | 2 gauges + text + uptime |
 
+**Disk readout note:** the flow uses host bind mounts (`/` → `/hostroot:ro`,
+`/mnt/data` → `/hostmnt/data:ro`) so `df` inside the container sees the host's
+filesystems instead of the overlay. The parser keys off the block-device
+(`/dev/mmcblk0p2`, `/dev/sda1`) rather than the mount-point, because BusyBox
+`df` reports the container's overlay mount-point for bind-mounted subtrees.
+
 ## Architecture
 
 ```
@@ -58,26 +64,24 @@ chmod 777 /home/hermes-pi/nodered-data   # uid mapping handled by --userns=keep-
 # 2. Pull the image
 podman pull docker.io/nodered/node-red:latest-minimal
 
-# 3. Start the container
+# 3. Start the container (installs dashboard palette + loads flows.json)
 ./run.sh
 
-# 4. Install the dashboard palette (one-time)
-./install-dashboard.sh
-
-# 5. Load the flow
-cp flows.json /home/hermes-pi/nodered-data/flows.json
-podman restart nodered
-
-# 6. Tunnel from a client
+# 4. Tunnel from a client
 ssh -N -L 1880:127.0.0.1:1880 hermes-pi@<pi-ip>
 # open http://127.0.0.1:1880/ui
 ```
 
+> `run.sh` is now self-contained: it pulls the image, creates the container with
+> all required bind mounts, installs the dashboard palette, symlinks it into the
+> persistent volume, copies `flows.json`, and restarts. `install-dashboard.sh`
+> is the recovery script to run after a manually-pulled new image.
+
 ## Files
 
 - `flows.json` — the exported Node-RED flow with the dashboard
-- `run.sh` — podman run command (localhost-only, keep-id, restart policy)
-- `install-dashboard.sh` — installs + symlinks `node-red-dashboard`
+- `run.sh` — podman run command (localhost-only, keep-id, restart, all bind mounts, auto-installs dashboard palette)
+- `install-dashboard.sh` — recovery script for re-installing the dashboard palette after a manual image pull
 - `tunnel.cmd` — Windows shortcut that opens the tunnel and the browser
 
 ## Customising the flow
@@ -111,6 +115,8 @@ Useful nodes to add later:
 | `TypeError: Cannot read properties of undefined (reading 'replace')` on `ui_gauge` | `format` field missing in node config | Add `"format": "{{value}}"` to each gauge in the flow JSON |
 | Dashboard palette not loaded after container restart | Global install is in the image layer, lost on image rebuild | `install-dashboard.sh` symlinks the global module into `/data/node_modules` so it survives |
 | LAN browser can't reach `192.168.0.205:1880` | By design — bound to 127.0.0.1 only | Use the SSH tunnel from `tunnel.cmd` |
+| Disk gauges show 0% / 0G / 0G | Bind mounts `/hostroot` (host `/`) or `/hostmnt/data` (host `/mnt/data`) not present | Re-run `./run.sh` to recreate the container with the full mount set |
+| `df` inside container returns overlay numbers | Expected — container's root is overlayfs; bind mounts don't change *its* disk usage | That's why the flow uses host bind mounts and keys off block devices (not paths) |
 
 ## License
 
