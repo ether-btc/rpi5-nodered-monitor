@@ -118,6 +118,12 @@ Useful nodes to add later:
 | Disk gauges show 0% / 0G / 0G | Bind mounts `/hostroot` (host `/`) or `/hostmnt/data` (host `/mnt/data`) not present | Re-run `./run.sh` to recreate the container with the full mount set |
 | `df` inside container returns overlay numbers | Expected — container's root is overlayfs; bind mounts don't change *its* disk usage | That's why the flow uses host bind mounts and keys off block devices (not paths) |
 
+## Related
+
+- **[Local LLM endpoints](docs/LLM-ENDPOINTS.md)** — the three systemd-supervised
+  `llama.cpp` servers on this host (incl. the one Hermes-LCM compression uses on
+  `:8080`), plus the watchdog cron job that alerts Telegram if one goes down.
+
 ## License
 
 MIT.
