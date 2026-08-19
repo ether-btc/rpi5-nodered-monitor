@@ -103,3 +103,26 @@ Stop a unit, wait 3 probes (~15 s), check Telegram; then restart.
 - `Type=simple` is correct; llama-server never daemonizes.
 - Do **not** repoint `:8080` away from the LCM model without also updating
   `~/.config/hermes-gateway.env`.
+
+## Restore from this repo
+
+The live unit + scripts are mirrored under `systemd/` in this repo. On a fresh
+host (or after a botched local edit), rebuild with:
+
+```bash
+SRC=$(pwd)/systemd
+cp "$SRC/llama-port-config.env"      ~/.hermes/scripts/
+cp "$SRC/llama-resolve-config.sh"    ~/.hermes/scripts/
+cp "$SRC/llama-server-wrapper.sh"    ~/.hermes/scripts/
+cp "$SRC/llm-endpoint-watchdog.sh"   ~/.hermes/scripts/
+cp "$SRC/llm-endpoint-watchdog-cron.sh" ~/.hermes/scripts/
+chmod +x ~/.hermes/scripts/{llama-resolve-config,llama-server-wrapper,llm-endpoint-watchdog,llm-endpoint-watchdog-cron}.sh
+mkdir -p ~/.config/systemd/user
+cp "$SRC/hermes-llama@.service"      ~/.config/systemd/user/
+systemctl --user daemon-reload
+for p in 8080 8081 8082; do systemctl --user enable --now hermes-llama@${p}.service; done
+```
+
+(The scripts in `systemd/` are the source of truth for on-disk copies; the
+cron job `llm-endpoint-watchdog` must be recreated separately via the Hermes
+cron tool — its definition is not file-based.)
