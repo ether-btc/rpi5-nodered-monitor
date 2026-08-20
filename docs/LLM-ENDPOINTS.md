@@ -1,8 +1,9 @@
 # LLM Inference Endpoints (local llama.cpp)
 
-This host runs three local `llama.cpp` inference endpoints, supervised by
-systemd so they (a) start on boot/login and (b) auto-restart if they crash.
-A watchdog cron job alerts Telegram if any endpoint stays down.
+This host has three local `llama.cpp` inference endpoints, supervised by
+systemd. Ports `:8080` and `:8081` are always on and auto-restart if they
+crash. Port `:8082` is intentionally cold during Phase 1. A watchdog cron job
+alerts Telegram if an endpoint in its configured scope stays down.
 
 This replaced the old "nohup llama-server &" setup, where a crash silently
 degraded everything that depended on the endpoint (notably Hermes-LCM summary
@@ -17,6 +18,11 @@ Edit bindings in **one file**: `~/.hermes/scripts/llama-port-config.env`.
 | `:8080` | `Qwen2.5-0.5B-Instruct-Q4_K_M.gguf` | **Hermes-LCM summary compression — dedicated, do not repurpose** |
 | `:8081` | `Qwen3-0.6B-Instruct-Q8_0.gguf` | General local agent |
 | `:8082` | `microsoft_Phi-4-mini-instruct-Q4_K_M.gguf` | General local agent |
+
+During the Phi-4 cold-start phase, `:8082` is disabled and stopped by default.
+See [PHI4-COLD-START-PHASE1.md](PHI4-COLD-START-PHASE1.md) for the measured
+start/stop results. The systemd unit allows 90 seconds for graceful stop so
+llama.cpp cleanup does not produce a false `Result=timeout` failed state.
 
 Three together = ~3.2 GiB RSS on a 7.9 GiB host (Pi 5). Do not add a fourth
 without measuring headroom.
@@ -56,7 +62,12 @@ Lingering must be enabled for the user so the units survive logout:
 
 ## Watchdog (alerting)
 
-A cron job probes each port's `/v1/models` and alerts if it stays down.
+A cron job probes each configured port's `/v1/models` and alerts if it stays
+down. Its default scope is the always-on endpoints, `:8080` and `:8081`.
+Intentionally cold `:8082` is excluded so its expected stopped state does not
+alert. `WATCHDOG_PORTS` remains an explicit override; a future wake-aware
+operation can include `8082` when appropriate (for example,
+`WATCHDOG_PORTS="8080 8081 8082"`).
 
 - **Job:** `llm-endpoint-watchdog` (cron id `c7ee7503c959`)
 - **Schedule:** every 5 min, `no_agent: true`
@@ -120,7 +131,8 @@ chmod +x ~/.hermes/scripts/{llama-resolve-config,llama-server-wrapper,llm-endpoi
 mkdir -p ~/.config/systemd/user
 cp "$SRC/hermes-llama@.service"      ~/.config/systemd/user/
 systemctl --user daemon-reload
-for p in 8080 8081 8082; do systemctl --user enable --now hermes-llama@${p}.service; done
+for p in 8080 8081; do systemctl --user enable --now hermes-llama@${p}.service; done
+systemctl --user disable --now hermes-llama@8082.service
 ```
 
 (The scripts in `systemd/` are the source of truth for on-disk copies; the

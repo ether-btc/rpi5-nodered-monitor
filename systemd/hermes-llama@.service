@@ -15,7 +15,8 @@ RestartSec=5
 RestartForceExitStatus=75
 KillMode=mixed
 KillSignal=SIGTERM
-TimeoutStopSec=30
+# Phi-4 cleanup on :8082 can exceed 30s; avoid a false timeout failure.
+TimeoutStopSec=90
 StandardOutput=journal
 StandardError=journal
 # Bound to loopback — no external exposure by accident.

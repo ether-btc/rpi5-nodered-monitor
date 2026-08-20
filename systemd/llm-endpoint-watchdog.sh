@@ -5,7 +5,7 @@
 # (with a short timeout), debounces consecutive failures (FAIL_THRESHOLD
 # before declaring DOWN), and emits ONE OF:
 #
-#   - "OK 8080 8081 8082"   — when every port is UP (identical bytes when
+#   - "OK 8080 8081"   — when every port is UP (identical bytes when
 #     state is stable; cron monitor_script hash-suppresses delivery).
 #   - "DOWN 8080 was_up=true" / "DOWN 8082 was_up=true"   — the FIRST run
 #     after a transition to DOWN (different bytes; cron delivers).
@@ -18,7 +18,7 @@
 # Counter persistence and threshold tuning live here, not in cron.
 set -uo pipefail
 
-PORTS_DEFAULT="8080 8081 8082"
+PORTS_DEFAULT="8080 8081"
 PROBE_TIMEOUT="${WATCHDOG_PROBE_TIMEOUT:-2}"
 FAIL_THRESHOLD="${WATCHDOG_FAIL_THRESHOLD:-3}"
 
